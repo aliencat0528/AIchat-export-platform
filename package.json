@@ -1,0 +1,32 @@
+{
+  "name": "aichat-export-platform",
+  "version": "0.1.0",
+  "description": "統一匯出與管理 AI 聊天記錄（ChatGPT、Gemini、Claude）",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "export-parser",
+    "browser-extension",
+    "web-app"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=web-app",
+    "dev:extension": "npm run dev --workspace=browser-extension",
+    "build:web": "npm run build --workspace=web-app",
+    "build:extension": "npm run build --workspace=browser-extension",
+    "build:parser": "npm run build --workspace=export-parser",
+    "build:all": "npm run build:parser && npm run build:extension && npm run build:web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint . --ext .ts,.vue"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.22.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
