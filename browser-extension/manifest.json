@@ -5,7 +5,8 @@
   "version": "0.1.0",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "https://chat.openai.com/*",
