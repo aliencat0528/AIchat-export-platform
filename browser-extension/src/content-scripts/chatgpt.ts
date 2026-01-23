@@ -32,42 +32,65 @@ function getCurrentConversationIdFromUrl(): string | null {
 }
 
 /**
- * 嘗試從頁面獲取 accessToken
- * ChatGPT 將 token 存在 __NEXT_DATA__ 或 localStorage 中
+ * 快取的 accessToken
  */
-function getAccessToken(): string | null {
+let cachedAccessToken: string | null = null;
+let tokenFetchedAt: number = 0;
+const TOKEN_CACHE_DURATION = 30 * 60 * 1000; // 30 分鐘
+
+/**
+ * 從 /api/auth/session 端點獲取 accessToken
+ *
+ * 機制說明：
+ * 1. ChatGPT 使用 NextAuth.js 進行身份驗證
+ * 2. 當用戶登入後，session 資訊存在 cookie 中（__Secure-next-auth.session-token）
+ * 3. /api/auth/session 端點會讀取這個 cookie 並返回包含 accessToken 的 JSON
+ * 4. accessToken 用於調用 /backend-api/* 的內部 API
+ */
+async function fetchAccessToken(): Promise<string | null> {
   try {
-    // 方法 1: 從 __NEXT_DATA__ 獲取
-    const nextData = document.getElementById('__NEXT_DATA__');
-    if (nextData) {
-      const data = JSON.parse(nextData.textContent || '{}');
-      if (data?.props?.pageProps?.accessToken) {
-        return data.props.pageProps.accessToken;
-      }
-    }
+    const baseUrl = getBaseUrl();
+    const response = await fetch(`${baseUrl}/api/auth/session`, {
+      method: 'GET',
+      credentials: 'include', // 重要：帶上 cookie
+    });
 
-    // 方法 2: 從 localStorage 獲取（某些版本可能存在這裡）
-    const authData = localStorage.getItem('oai/auth');
-    if (authData) {
-      const parsed = JSON.parse(authData);
-      if (parsed?.accessToken) {
-        return parsed.accessToken;
-      }
-    }
-
-    // 方法 3: 從 cookie 中檢測登入狀態
-    const cookies = document.cookie;
-    if (cookies.includes('__Secure-next-auth.session-token') ||
-        cookies.includes('__Host-next-auth.csrf-token')) {
-      // 用戶已登入，API 應該可用
+    if (!response.ok) {
+      console.warn('獲取 session 失敗:', response.status);
       return null;
     }
 
+    const data = await response.json();
+
+    if (data?.accessToken) {
+      console.log('成功獲取 accessToken');
+      return data.accessToken;
+    }
+
+    console.warn('Session 回應中沒有 accessToken:', data);
     return null;
   } catch (e) {
-    console.warn('無法獲取 accessToken:', e);
+    console.error('fetchAccessToken 失敗:', e);
     return null;
   }
+}
+
+/**
+ * 獲取 accessToken（帶快取）
+ */
+async function getAccessToken(): Promise<string | null> {
+  const now = Date.now();
+
+  // 如果快取有效，直接返回
+  if (cachedAccessToken && (now - tokenFetchedAt) < TOKEN_CACHE_DURATION) {
+    return cachedAccessToken;
+  }
+
+  // 重新獲取 token
+  cachedAccessToken = await fetchAccessToken();
+  tokenFetchedAt = now;
+
+  return cachedAccessToken;
 }
 
 // 監聽來自 popup 的訊息
@@ -105,14 +128,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 /**
  * 構建 API 請求的 headers
  */
-function buildHeaders(): HeadersInit {
+async function buildHeaders(): Promise<HeadersInit> {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    console.warn('未能獲取 accessToken，API 請求可能會失敗');
   }
 
   return headers;
@@ -131,10 +156,17 @@ function getBaseUrl(): string {
 
 /**
  * 發送 API 請求並處理錯誤
+ *
+ * 機制說明：
+ * 1. 先獲取 accessToken（從 /api/auth/session）
+ * 2. 使用 Bearer token 調用 /backend-api/* 端點
+ * 3. 如果主域名失敗，不再嘗試備用域名（會造成 CORS 錯誤）
  */
 async function apiRequest(endpoint: string): Promise<Response> {
   const baseUrl = getBaseUrl();
-  const headers = buildHeaders();
+  const headers = await buildHeaders();
+
+  console.log(`API 請求: ${baseUrl}${endpoint}`);
 
   const response = await fetch(`${baseUrl}${endpoint}`, {
     method: 'GET',
@@ -143,22 +175,12 @@ async function apiRequest(endpoint: string): Promise<Response> {
   });
 
   if (!response.ok) {
-    // 嘗試備用域名
-    const altBaseUrl = baseUrl.includes('chatgpt.com')
-      ? 'https://chat.openai.com'
-      : 'https://chatgpt.com';
+    // 記錄詳細錯誤資訊
+    console.error(`API 請求失敗: ${response.status} ${response.statusText}`);
+    console.error(`端點: ${endpoint}`);
 
-    const altResponse = await fetch(`${altBaseUrl}${endpoint}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers,
-    });
-
-    if (!altResponse.ok) {
-      throw new Error(`API 請求失敗: ${response.status} - ${response.statusText}`);
-    }
-
-    return altResponse;
+    // 不再嘗試備用域名，因為跨域請求會被 CORS 阻擋
+    throw new Error(`API 請求失敗: ${response.status} - ${response.statusText}`);
   }
 
   return response;
@@ -437,7 +459,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 // 初始化：記錄載入資訊
-const version = '1.5.0';
+const version = '1.6.0';
 const currentUrl = window.location.href;
 const conversationId = getCurrentConversationIdFromUrl();
 
