@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Chat Export",
   "description": "匯出 ChatGPT、Gemini、Claude 的聊天記錄",
-  "version": "0.1.0",
+  "version": "1.7.0",
   "permissions": [
     "activeTab",
     "storage",
