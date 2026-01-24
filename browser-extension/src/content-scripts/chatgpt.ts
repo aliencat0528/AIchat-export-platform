@@ -49,6 +49,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * 從 ChatGPT API 獲取對話列表
  */
 async function getConversations(): Promise<ConversationInfo[]> {
+  // 優先使用 DOM 方法（更可靠）
+  const domConversations = getConversationsFromDOM();
+  if (domConversations.length > 0) {
+    console.log('從 DOM 獲取對話列表:', domConversations.length);
+    return domConversations;
+  }
+
+  // Fallback: 嘗試 API
   const allConversations: ConversationInfo[] = [];
   let offset = 0;
   const limit = 50;
@@ -102,6 +110,12 @@ async function getConversations(): Promise<ConversationInfo[]> {
       }
     }
 
+    // 如果 API 返回空結果，嘗試 DOM
+    if (allConversations.length === 0) {
+      console.log('API 返回空結果，嘗試 DOM');
+      return getConversationsFromDOM();
+    }
+
     return allConversations.map(conv => ({
       id: conv.id,
       title: conv.title || '無標題',
@@ -110,7 +124,6 @@ async function getConversations(): Promise<ConversationInfo[]> {
     }));
   } catch (error) {
     console.error('獲取對話列表失敗:', error);
-    // Fallback: 嘗試從 DOM 獲取
     return getConversationsFromDOM();
   }
 }
