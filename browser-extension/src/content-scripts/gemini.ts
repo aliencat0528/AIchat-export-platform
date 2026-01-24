@@ -55,44 +55,34 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function getConversations(): Promise<ConversationInfo[]> {
   const conversations: ConversationInfo[] = [];
 
-  // Gemini 側邊欄對話列表的可能選擇器
-  const selectors = [
-    // 對話項目連結
-    'a[href*="/app/"]',
-    'a[data-conversation-id]',
-    '[role="listitem"] a',
-    // 側邊欄對話
-    'mat-nav-list a',
-    '.conversation-item',
-    // 通用連結
-    'nav a[href*="conversation"]',
-  ];
+  // Gemini 側邊欄對話列表選擇器
+  const items = document.querySelectorAll('a[href*="/app/"]');
 
-  for (const selector of selectors) {
-    const items = document.querySelectorAll(selector);
-    if (items.length > 0) {
-      items.forEach((item, index) => {
-        const href = item.getAttribute('href') || '';
-        const conversationId = item.getAttribute('data-conversation-id');
-        const title = item.textContent?.trim() || `對話 ${index + 1}`;
+  items.forEach((item, index) => {
+    const href = item.getAttribute('href') || '';
 
-        // 從 URL 提取對話 ID
-        const idMatch = href.match(/\/app\/([a-zA-Z0-9_-]+)/);
-        const id = conversationId || (idMatch ? idMatch[1] : `gemini-${index}`);
-
-        if (id && !conversations.find(c => c.id === id)) {
-          conversations.push({
-            id,
-            title: title.slice(0, 100), // 限制標題長度
-            create_time: new Date().toISOString(),
-            update_time: new Date().toISOString(),
-          });
-        }
-      });
-
-      if (conversations.length > 0) break;
+    // 過濾掉非對話連結（如登出連結、accounts.google.com 等）
+    if (!href.includes('gemini.google.com/app/') && !href.startsWith('/app/')) {
+      return;
     }
-  }
+
+    // 從 URL 提取對話 ID
+    const idMatch = href.match(/\/app\/([a-zA-Z0-9_-]+)/);
+    if (!idMatch) return;
+
+    const id = idMatch[1];
+    const title = item.textContent?.trim() || `對話 ${index + 1}`;
+
+    // 避免重複
+    if (!conversations.find(c => c.id === id)) {
+      conversations.push({
+        id,
+        title: title.slice(0, 100),
+        create_time: new Date().toISOString(),
+        update_time: new Date().toISOString(),
+      });
+    }
+  });
 
   // 如果找不到對話列表，嘗試獲取當前對話
   if (conversations.length === 0) {
@@ -162,54 +152,69 @@ async function getConversationContent(conversationId: string): Promise<unknown> 
 function extractMessagesFromDOM(): MessageInfo[] {
   const messages: MessageInfo[] = [];
 
-  // Gemini 訊息區域的可能選擇器
-  const messageSelectors = [
-    // 對話輪次容器
-    '[data-message-id]',
-    '.conversation-turn',
-    'message-content',
-    // 使用者訊息
-    '.user-message',
-    '[data-author="user"]',
-    // 模型回應
-    '.model-response',
-    '[data-author="model"]',
-    // 通用對話區塊
-    '.chat-message',
-    '[role="article"]',
-  ];
+  // 方法 1：使用 Gemini 實際的選擇器（根據 DOM 分析結果）
+  // user-query 和 model-response 是自定義元素
+  const userQueries = document.querySelectorAll('user-query, .query-content');
+  const modelResponses = document.querySelectorAll('model-response, .response-content');
 
-  // 嘗試找到訊息容器
-  for (const selector of messageSelectors) {
-    const items = document.querySelectorAll(selector);
-    if (items.length > 0) {
-      items.forEach(item => {
-        const role = determineRole(item);
-        const content = extractTextContent(item);
+  // 收集所有訊息並按 DOM 順序排列
+  interface MessageNode {
+    element: Element;
+    role: 'user' | 'assistant';
+  }
 
-        if (content) {
-          messages.push({ role, content });
-        }
+  const allMessages: MessageNode[] = [];
+
+  userQueries.forEach(el => {
+    allMessages.push({ element: el, role: 'user' });
+  });
+
+  modelResponses.forEach(el => {
+    allMessages.push({ element: el, role: 'assistant' });
+  });
+
+  // 按 DOM 順序排序（使用 compareDocumentPosition）
+  allMessages.sort((a, b) => {
+    const position = a.element.compareDocumentPosition(b.element);
+    if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+    if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+    return 0;
+  });
+
+  // 提取內容
+  for (const msg of allMessages) {
+    const content = extractTextContent(msg.element);
+    if (content && content.length > 0) {
+      messages.push({
+        role: msg.role,
+        content,
       });
-
-      if (messages.length > 0) break;
     }
   }
 
-  // Fallback: 嘗試按結構解析
+  // Fallback: 如果上述方法失敗，嘗試其他選擇器
   if (messages.length === 0) {
-    const allTextBlocks = document.querySelectorAll(
-      'div[class*="message"], div[class*="response"], div[class*="query"]'
-    );
+    const fallbackSelectors = [
+      '[data-message-id]',
+      '.conversation-turn',
+      '[role="article"]',
+    ];
 
-    allTextBlocks.forEach((block, index) => {
-      const content = extractTextContent(block);
-      if (content && content.length > 10) {
-        // 交替判斷角色（簡單啟發式）
-        const role = index % 2 === 0 ? 'user' : 'assistant';
-        messages.push({ role, content });
+    for (const selector of fallbackSelectors) {
+      const items = document.querySelectorAll(selector);
+      if (items.length > 0) {
+        items.forEach(item => {
+          const role = determineRole(item);
+          const content = extractTextContent(item);
+
+          if (content && content.length > 10) {
+            messages.push({ role, content });
+          }
+        });
+
+        if (messages.length > 0) break;
       }
-    });
+    }
   }
 
   return messages;

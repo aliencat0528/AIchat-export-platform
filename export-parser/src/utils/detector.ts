@@ -48,6 +48,19 @@ async function parseExtensionExport(data: ExtensionExportData): Promise<ParseRes
     // 處理批次匯出（多個對話）
     const rawConversations = data.conversations || (data.conversation ? [data.conversation] : []);
 
+    // 檢查是否所有對話都需要導航（舊版本匯出的問題）
+    const needsNavigationCount = rawConversations.filter(
+      (c) => (c as { needsNavigation?: boolean }).needsNavigation
+    ).length;
+
+    if (needsNavigationCount === rawConversations.length && rawConversations.length > 0) {
+      return {
+        success: false,
+        conversations: [],
+        error: '此檔案是使用舊版擴充功能匯出的，請重新載入擴充功能後再次匯出對話。新版本會自動導航獲取對話內容。',
+      };
+    }
+
     for (const conv of rawConversations as Array<{
       id?: string;
       title?: string;
