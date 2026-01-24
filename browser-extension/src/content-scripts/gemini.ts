@@ -6,6 +6,9 @@
  * 注意：DOM 結構可能隨 Google 更新而變動
  */
 
+// 將此檔案視為模組，避免 TypeScript 報告重複函數錯誤
+export {};
+
 interface ConversationInfo {
   id: string;
   title: string;
