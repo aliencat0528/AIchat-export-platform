@@ -286,8 +286,19 @@ function extractTextContent(element: Element): string {
   const clone = element.cloneNode(true) as Element;
 
   // 移除思考過程區塊（Gemini 的 "thinking" 區域）
-  const thinkingBlocks = clone.querySelectorAll('[class*="thinking"], [class*="thought"], .loading-thoughts');
+  // 注意：不要使用 [class*="thought"]，因為會誤刪 has-thoughts 容器
+  // 只移除實際的思考內容區塊
+  const thinkingBlocks = clone.querySelectorAll('.thinking-content, .thought-content, .loading-thoughts, [data-thinking], [data-thought]');
   thinkingBlocks.forEach(block => block.remove());
+
+  // 移除「顯示思路」按鈕文字
+  const toggleButtons = clone.querySelectorAll('button, [role="button"]');
+  toggleButtons.forEach(btn => {
+    const text = btn.textContent?.trim() || '';
+    if (text === '顯示思路' || text === '隱藏思路' || text === 'Show thinking' || text === 'Hide thinking') {
+      btn.remove();
+    }
+  });
 
   // 處理程式碼區塊
   const codeBlocks = clone.querySelectorAll('pre');
