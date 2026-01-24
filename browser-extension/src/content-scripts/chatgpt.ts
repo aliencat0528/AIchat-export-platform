@@ -7,6 +7,9 @@
  * - 單一對話: /backend-api/conversation/{id}
  */
 
+// 將此檔案視為模組，避免 TypeScript 報告重複函數錯誤
+export {};
+
 interface ConversationInfo {
   id: string;
   title: string;
@@ -19,6 +22,11 @@ interface ConversationListResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+interface MessageInfo {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 /**
@@ -109,17 +117,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'getMultipleConversations') {
-    getMultipleConversations(message.conversationIds)
-      .then(conversations => sendResponse({ conversations }))
+  if (message.action === 'getCurrentConversation') {
+    getCurrentConversation()
+      .then(content => sendResponse({ content }))
       .catch(error => sendResponse({ error: error.message }));
     return true;
   }
 
-  // 新增：獲取當前對話
-  if (message.action === 'getCurrentConversation') {
-    getCurrentConversation()
-      .then(content => sendResponse({ content }))
+  if (message.action === 'getMultipleConversations') {
+    getMultipleConversations(message.conversationIds)
+      .then(conversations => sendResponse({ conversations }))
       .catch(error => sendResponse({ error: error.message }));
     return true;
   }
@@ -190,6 +197,14 @@ async function apiRequest(endpoint: string): Promise<Response> {
  * 從 ChatGPT API 獲取對話列表
  */
 async function getConversations(): Promise<ConversationInfo[]> {
+  // 優先使用 DOM 方法（更可靠）
+  const domConversations = getConversationsFromDOM();
+  if (domConversations.length > 0) {
+    console.log('從 DOM 獲取對話列表:', domConversations.length);
+    return domConversations;
+  }
+
+  // Fallback: 嘗試 API
   const allConversations: ConversationInfo[] = [];
   let offset = 0;
   const limit = 50;
@@ -218,6 +233,12 @@ async function getConversations(): Promise<ConversationInfo[]> {
       }
     }
 
+    // 如果 API 返回空結果，嘗試 DOM
+    if (allConversations.length === 0) {
+      console.log('API 返回空結果，嘗試 DOM');
+      return getConversationsFromDOM();
+    }
+
     return allConversations.map(conv => ({
       id: conv.id,
       title: conv.title || '無標題',
@@ -226,7 +247,6 @@ async function getConversations(): Promise<ConversationInfo[]> {
     }));
   } catch (error) {
     console.error('獲取對話列表失敗:', error);
-    // Fallback: 嘗試從 DOM 獲取
     return getConversationsFromDOM();
   }
 }
@@ -317,14 +337,20 @@ function getConversationsFromDOM(): ConversationInfo[] {
 
 /**
  * 獲取單一對話的完整內容
+ * 使用 accessToken 機制，失敗時返回 needsNavigation 標記
  */
 async function getConversationContent(conversationId: string): Promise<unknown> {
   try {
     const response = await apiRequest(`/backend-api/conversation/${conversationId}`);
     return await response.json();
   } catch (e) {
-    console.error(`獲取對話 ${conversationId} 失敗:`, e);
-    throw new Error('無法獲取對話內容');
+    // API 失敗時，返回需要導航的標記（讓 popup 使用導航模式）
+    console.warn(`API 獲取對話 ${conversationId} 失敗，標記需要導航:`, e);
+    return {
+      id: conversationId,
+      needsNavigation: true,
+      error: String(e),
+    };
   }
 }
 
@@ -333,102 +359,183 @@ async function getConversationContent(conversationId: string): Promise<unknown> 
  * 優先從 URL 中提取對話 ID，然後調用 API 獲取完整內容
  * 如果 API 失敗，則從 DOM 解析當前對話
  */
-async function getCurrentConversation(): Promise<unknown> {
-  // 方法 1: 從 URL 提取對話 ID 並調用 API
+async function getCurrentConversation(): Promise<{
+  id: string;
+  title: string;
+  messages: MessageInfo[];
+}> {
   const conversationId = getCurrentConversationIdFromUrl();
 
+  // 嘗試從 API 獲取
   if (conversationId) {
     try {
-      const content = await getConversationContent(conversationId);
-      return content;
+      const response = await apiRequest(`/backend-api/conversation/${conversationId}`);
+      const data = await response.json();
+
+      // 如果 API 成功且有 mapping，解析它
+      if (data && data.mapping) {
+        const messages = parseMessagesFromMapping(data.mapping);
+        return {
+          id: conversationId,
+          title: data.title || '無標題對話',
+          messages,
+        };
+      }
     } catch (e) {
       console.warn('從 API 獲取當前對話失敗，嘗試從 DOM 解析:', e);
     }
   }
 
-  // 方法 2: 從 DOM 解析當前對話
-  return parseCurrentConversationFromDOM();
+  // Fallback: 從 DOM 提取
+  const messages = extractMessagesFromDOM();
+  const id = conversationId || `chatgpt-${Date.now()}`;
+
+  const titleElement = document.querySelector('h1, [data-testid="conversation-title"]');
+  const title = titleElement?.textContent?.trim() || '無標題對話';
+
+  return {
+    id,
+    title,
+    messages,
+  };
 }
 
 /**
- * 從 DOM 解析當前對話內容
+ * 從 ChatGPT API 的 mapping 格式解析訊息
  */
-function parseCurrentConversationFromDOM(): unknown {
-  const messages: Array<{
-    role: string;
-    content: string;
-    timestamp?: string;
-  }> = [];
+function parseMessagesFromMapping(mapping: Record<string, unknown>): MessageInfo[] {
+  const messages: MessageInfo[] = [];
+  const nodes: Array<{ id: string; parent: string | null; message: unknown }> = [];
 
-  // 2024-2025 ChatGPT 對話訊息選擇器
-  const messageSelectors = [
-    '[data-message-author-role]',
-    '[class*="agent-turn"]',
-    '[class*="user-turn"]',
-    'div[data-testid*="conversation-turn"]',
-    '[class*="ConversationItem"]',
-    '.text-base',
-  ];
+  // 收集所有節點
+  for (const [id, node] of Object.entries(mapping)) {
+    const n = node as { parent?: string; message?: unknown };
+    nodes.push({
+      id,
+      parent: n.parent || null,
+      message: n.message,
+    });
+  }
 
-  for (const selector of messageSelectors) {
-    try {
-      const messageElements = document.querySelectorAll(selector);
-      if (messageElements.length > 0) {
-        messageElements.forEach((el) => {
-          // 判斷角色
-          let role = 'unknown';
-          const authorRole = el.getAttribute('data-message-author-role');
-          if (authorRole) {
-            role = authorRole;
-          } else if (el.className.includes('user') || el.closest('[data-message-author-role="user"]')) {
-            role = 'user';
-          } else if (el.className.includes('assistant') || el.closest('[data-message-author-role="assistant"]')) {
-            role = 'assistant';
-          }
+  // 找到根節點並按順序遍歷
+  const visited = new Set<string>();
+  const traverse = (nodeId: string) => {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
 
-          // 獲取內容
-          const contentEl = el.querySelector('.markdown, [class*="prose"], [class*="message-content"]') || el;
-          const content = contentEl.textContent?.trim() || '';
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
 
-          if (content && role !== 'unknown') {
-            messages.push({ role, content });
-          }
-        });
+    const msg = node.message as {
+      author?: { role?: string };
+      content?: { parts?: string[] };
+    } | null;
 
-        if (messages.length > 0) {
-          break;
+    if (msg && msg.author && msg.content?.parts) {
+      const role = msg.author.role;
+      if (role === 'user' || role === 'assistant') {
+        const content = msg.content.parts.join('\n');
+        if (content.trim()) {
+          messages.push({
+            role: role as 'user' | 'assistant',
+            content,
+          });
         }
       }
-    } catch (e) {
-      console.warn(`訊息選擇器 "${selector}" 解析失敗:`, e);
     }
-  }
 
-  // 嘗試獲取對話標題
-  let title = '當前對話';
-  const titleSelectors = [
-    'h1',
-    '[class*="title"]',
-    'header h1',
-    '[data-testid="conversation-title"]',
-  ];
-
-  for (const selector of titleSelectors) {
-    const titleEl = document.querySelector(selector);
-    if (titleEl?.textContent?.trim()) {
-      title = titleEl.textContent.trim();
-      break;
+    // 找子節點
+    const children = nodes.filter(n => n.parent === nodeId);
+    for (const child of children) {
+      traverse(child.id);
     }
-  }
-
-  return {
-    title,
-    conversation_id: getCurrentConversationIdFromUrl() || 'dom-parsed',
-    create_time: new Date().toISOString(),
-    mapping: null, // DOM 解析無法獲得完整 mapping
-    messages, // 簡化的訊息列表
-    source: 'dom',
   };
+
+  // 從根節點開始
+  const roots = nodes.filter(n => !n.parent);
+  for (const root of roots) {
+    traverse(root.id);
+  }
+
+  return messages;
+}
+
+/**
+ * 從 DOM 提取訊息
+ */
+function extractMessagesFromDOM(): MessageInfo[] {
+  const messages: MessageInfo[] = [];
+
+  // ChatGPT 的訊息選擇器
+  const messageContainers = document.querySelectorAll('[data-message-author-role]');
+
+  messageContainers.forEach(container => {
+    const role = container.getAttribute('data-message-author-role');
+    const contentEl = container.querySelector('.markdown, .whitespace-pre-wrap');
+
+    if (contentEl) {
+      const content = extractTextContent(contentEl);
+      if (content && content.length > 0) {
+        messages.push({
+          role: role === 'user' ? 'user' : 'assistant',
+          content,
+        });
+      }
+    }
+  });
+
+  // Fallback: 嘗試其他選擇器
+  if (messages.length === 0) {
+    const turns = document.querySelectorAll('[data-testid^="conversation-turn"]');
+    turns.forEach((turn, index) => {
+      const content = extractTextContent(turn);
+      if (content && content.length > 10) {
+        messages.push({
+          role: index % 2 === 0 ? 'user' : 'assistant',
+          content,
+        });
+      }
+    });
+  }
+
+  return messages;
+}
+
+/**
+ * 提取元素的文字內容，保留格式
+ */
+function extractTextContent(element: Element): string {
+  // 複製元素以避免修改原始 DOM
+  const clone = element.cloneNode(true) as Element;
+
+  // 處理程式碼區塊
+  const codeBlocks = clone.querySelectorAll('pre');
+  codeBlocks.forEach(pre => {
+    const code = pre.querySelector('code');
+    const lang = code?.className.match(/language-(\w+)/)?.[1] || '';
+    const codeText = code?.textContent || pre.textContent || '';
+    pre.textContent = '\n```' + lang + '\n' + codeText + '\n```\n';
+  });
+
+  // 處理行內程式碼
+  const inlineCodes = clone.querySelectorAll('code:not(pre code)');
+  inlineCodes.forEach(code => {
+    code.textContent = '`' + code.textContent + '`';
+  });
+
+  // 處理列表
+  const listItems = clone.querySelectorAll('li');
+  listItems.forEach(li => {
+    li.textContent = '• ' + li.textContent?.trim() + '\n';
+  });
+
+  // 獲取最終文字
+  let text = clone.textContent?.trim() || '';
+
+  // 清理多餘的空白行
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text;
 }
 
 /**
@@ -459,7 +566,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 // 初始化：記錄載入資訊
-const version = '1.6.0';
+const version = '1.7.0';
 const currentUrl = window.location.href;
 const conversationId = getCurrentConversationIdFromUrl();
 

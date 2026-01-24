@@ -103,6 +103,127 @@ const toggleAll = (checked: boolean) => {
   conversations.value.forEach(c => c.selected = checked);
 };
 
+/**
+ * 等待頁面載入完成
+ */
+const waitForPageLoad = (tabId: number): Promise<void> => {
+  return new Promise((resolve) => {
+    const checkReady = () => {
+      chrome.tabs.get(tabId, (tab) => {
+        if (tab.status === 'complete') {
+          // 額外等待一下讓 content script 載入
+          setTimeout(resolve, 1000);
+        } else {
+          setTimeout(checkReady, 200);
+        }
+      });
+    };
+    checkReady();
+  });
+};
+
+/**
+ * Gemini 專用：透過導航獲取多個對話內容
+ */
+const exportGeminiConversations = async (
+  tabId: number,
+  selected: ConversationInfo[],
+  originalUrl: string
+): Promise<unknown[]> => {
+  const results: unknown[] = [];
+  const total = selected.length;
+
+  for (let i = 0; i < selected.length; i++) {
+    const conv = selected[i];
+    statusMessage.value = `正在匯出 (${i + 1}/${total}): ${conv.title.slice(0, 20)}...`;
+    exportProgress.value = Math.round(((i + 1) / total) * 100);
+
+    try {
+      // 導航到對話頁面
+      const conversationUrl = `https://gemini.google.com/app/${conv.id}`;
+      await chrome.tabs.update(tabId, { url: conversationUrl });
+
+      // 等待頁面載入
+      await waitForPageLoad(tabId);
+
+      // 獲取對話內容
+      const response = await chrome.tabs.sendMessage(tabId, {
+        action: 'getCurrentConversation',
+      });
+
+      if (response?.content) {
+        results.push(response.content);
+      } else {
+        results.push({ id: conv.id, title: conv.title, error: '無法獲取內容' });
+      }
+    } catch (e) {
+      console.error(`獲取對話 ${conv.id} 失敗:`, e);
+      results.push({ id: conv.id, title: conv.title, error: String(e) });
+    }
+
+    // 防止請求過快
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  // 導航回原始頁面
+  statusMessage.value = '正在返回原始頁面...';
+  await chrome.tabs.update(tabId, { url: originalUrl });
+  await waitForPageLoad(tabId);
+
+  return results;
+};
+
+/**
+ * ChatGPT 專用：透過導航獲取對話內容（當 API 失敗時）
+ */
+const exportChatGPTConversations = async (
+  tabId: number,
+  selected: ConversationInfo[],
+  originalUrl: string
+): Promise<unknown[]> => {
+  const results: unknown[] = [];
+  const total = selected.length;
+
+  for (let i = 0; i < selected.length; i++) {
+    const conv = selected[i];
+    statusMessage.value = `正在匯出 (${i + 1}/${total}): ${conv.title.slice(0, 20)}...`;
+    exportProgress.value = Math.round(((i + 1) / total) * 100);
+
+    try {
+      // 導航到對話頁面
+      const conversationUrl = `https://chatgpt.com/c/${conv.id}`;
+      await chrome.tabs.update(tabId, { url: conversationUrl });
+
+      // 等待頁面載入
+      await waitForPageLoad(tabId);
+
+      // 獲取對話內容
+      const response = await chrome.tabs.sendMessage(tabId, {
+        action: 'getCurrentConversation',
+      });
+
+      if (response?.content) {
+        results.push(response.content);
+      } else {
+        results.push({ id: conv.id, title: conv.title, error: '無法獲取內容' });
+      }
+    } catch (e) {
+      console.error(`獲取對話 ${conv.id} 失敗:`, e);
+      results.push({ id: conv.id, title: conv.title, error: String(e) });
+    }
+
+    // 防止請求過快
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  // 導航回原始頁面
+  statusMessage.value = '正在返回原始頁面...';
+  await chrome.tabs.update(tabId, { url: originalUrl });
+  await waitForPageLoad(tabId);
+
+  return results;
+};
+
 const exportSelected = async () => {
   const selected = conversations.value.filter(c => c.selected);
   if (selected.length === 0) {
@@ -116,24 +237,56 @@ const exportSelected = async () => {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id) throw new Error('無法取得頁面');
+    if (!tab.id || !tab.url) throw new Error('無法取得頁面');
 
-    const conversationIds = selected.map(c => c.id);
+    let exportedConversations: unknown[];
 
-    // 批次獲取對話內容
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'getMultipleConversations',
-      conversationIds,
-    });
+    // Gemini 需要特殊處理：透過導航獲取每個對話
+    if (currentPlatform.value === 'gemini') {
+      exportedConversations = await exportGeminiConversations(tab.id, selected, tab.url);
+    } else if (currentPlatform.value === 'chatgpt') {
+      // ChatGPT：先嘗試 API，如果有任何失敗則改用導航
+      const conversationIds = selected.map(c => c.id);
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'getMultipleConversations',
+        conversationIds,
+      });
 
-    if (response?.error) {
-      throw new Error(response.error);
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+
+      const apiResults = response.conversations || [];
+
+      // 檢查是否有需要導航的對話
+      const needsNavigation = apiResults.some(
+        (r: { needsNavigation?: boolean }) => r?.needsNavigation
+      );
+
+      if (needsNavigation) {
+        console.log('API 部分失敗，改用導航模式');
+        exportedConversations = await exportChatGPTConversations(tab.id, selected, tab.url);
+      } else {
+        exportedConversations = apiResults;
+      }
+    } else {
+      // Claude 使用 API
+      const conversationIds = selected.map(c => c.id);
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'getMultipleConversations',
+        conversationIds,
+      });
+
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+      exportedConversations = response.conversations || [];
     }
 
     const exportData = {
       platform: currentPlatform.value,
       exportedAt: new Date().toISOString(),
-      conversations: response.conversations || [],
+      conversations: exportedConversations,
     };
 
     // 下載 JSON 檔案

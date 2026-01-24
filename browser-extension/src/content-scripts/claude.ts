@@ -7,6 +7,9 @@
  * - 單一對話: /api/organizations/{org_id}/chat_conversations/{id}
  */
 
+// 將此檔案視為模組，避免 TypeScript 報告重複函數錯誤
+export {};
+
 interface ConversationInfo {
   id: string;
   title: string;

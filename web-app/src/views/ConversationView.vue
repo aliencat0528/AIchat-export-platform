@@ -3,6 +3,22 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getConversation, deleteConversation } from '@/db';
 import type { UnifiedConversation, Platform } from '@aichat-export/shared';
+import { marked } from 'marked';
+
+// 配置 marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
+// 渲染 Markdown
+const renderMarkdown = (content: string): string => {
+  try {
+    return marked.parse(content) as string;
+  } catch {
+    return content;
+  }
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -92,9 +108,7 @@ const handleExport = () => {
             <span class="role">{{ msg.role === 'user' ? '你' : 'AI' }}</span>
             <span class="time">{{ formatDate(msg.createdAt) }}</span>
           </div>
-          <div class="message-content">
-            {{ msg.content }}
-          </div>
+          <div class="message-content markdown-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
       </div>
     </template>
@@ -230,7 +244,109 @@ const handleExport = () => {
 }
 
 .message-content {
-  white-space: pre-wrap;
   line-height: 1.6;
+}
+
+/* Markdown 樣式 */
+.markdown-body {
+  font-size: 14px;
+}
+
+.markdown-body p {
+  margin: 0 0 12px 0;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+}
+
+.markdown-body code {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-body li {
+  margin: 4px 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 16px 0 8px 0;
+  font-weight: 600;
+}
+
+.markdown-body h1 { font-size: 1.4em; }
+.markdown-body h2 { font-size: 1.2em; }
+.markdown-body h3 { font-size: 1.1em; }
+
+.markdown-body blockquote {
+  border-left: 3px solid #ddd;
+  margin: 12px 0;
+  padding-left: 16px;
+  color: #666;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: #f8f9fa;
+  font-weight: 500;
+}
+
+.markdown-body a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 16px 0;
 }
 </style>
