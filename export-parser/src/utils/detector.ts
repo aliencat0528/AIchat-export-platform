@@ -61,6 +61,17 @@ async function parseExtensionExport(data: ExtensionExportData): Promise<ParseRes
       };
     }
 
+    // 檢查是否為 ChatGPT 原始 API 格式（有 mapping 欄位）
+    const hasMappingFormat = rawConversations.some(
+      (c) => (c as { mapping?: unknown }).mapping !== undefined
+    );
+
+    if (hasMappingFormat && data.platform === 'chatgpt') {
+      // 使用 ChatGPTParser 解析
+      const chatgptParser = new ChatGPTParser();
+      return chatgptParser.parse(rawConversations);
+    }
+
     for (const conv of rawConversations as Array<{
       id?: string;
       title?: string;

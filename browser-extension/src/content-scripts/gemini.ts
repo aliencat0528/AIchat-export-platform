@@ -152,10 +152,18 @@ async function getConversationContent(conversationId: string): Promise<unknown> 
 function extractMessagesFromDOM(): MessageInfo[] {
   const messages: MessageInfo[] = [];
 
-  // 方法 1：使用 Gemini 實際的選擇器（根據 DOM 分析結果）
-  // user-query 和 model-response 是自定義元素
-  const userQueries = document.querySelectorAll('user-query, .query-content');
-  const modelResponses = document.querySelectorAll('model-response, .response-content');
+  // 使用 Gemini 的自定義元素選擇器（優先使用 user-query 和 model-response）
+  // 注意：不要同時使用 .query-content 和 user-query，因為它們可能是巢狀關係
+  let userQueries = document.querySelectorAll('user-query');
+  let modelResponses = document.querySelectorAll('model-response');
+
+  // 如果沒找到自定義元素，嘗試 class 選擇器
+  if (userQueries.length === 0) {
+    userQueries = document.querySelectorAll('.query-content');
+  }
+  if (modelResponses.length === 0) {
+    modelResponses = document.querySelectorAll('.response-content');
+  }
 
   // 收集所有訊息並按 DOM 順序排列
   interface MessageNode {
@@ -164,16 +172,23 @@ function extractMessagesFromDOM(): MessageInfo[] {
   }
 
   const allMessages: MessageNode[] = [];
+  const addedElements = new Set<Element>(); // 避免重複
 
   userQueries.forEach(el => {
-    allMessages.push({ element: el, role: 'user' });
+    if (!addedElements.has(el)) {
+      allMessages.push({ element: el, role: 'user' });
+      addedElements.add(el);
+    }
   });
 
   modelResponses.forEach(el => {
-    allMessages.push({ element: el, role: 'assistant' });
+    if (!addedElements.has(el)) {
+      allMessages.push({ element: el, role: 'assistant' });
+      addedElements.add(el);
+    }
   });
 
-  // 按 DOM 順序排序（使用 compareDocumentPosition）
+  // 按 DOM 順序排序
   allMessages.sort((a, b) => {
     const position = a.element.compareDocumentPosition(b.element);
     if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
@@ -181,14 +196,16 @@ function extractMessagesFromDOM(): MessageInfo[] {
     return 0;
   });
 
-  // 提取內容
+  // 提取內容，並去除重複
+  const seenContents = new Set<string>();
   for (const msg of allMessages) {
     const content = extractTextContent(msg.element);
-    if (content && content.length > 0) {
+    if (content && content.length > 0 && !seenContents.has(content)) {
       messages.push({
         role: msg.role,
         content,
       });
+      seenContents.add(content);
     }
   }
 
