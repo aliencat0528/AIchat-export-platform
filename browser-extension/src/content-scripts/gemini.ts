@@ -40,6 +40,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch(error => sendResponse({ error: error.message }));
     return true;
   }
+
+  if (message.action === 'getMultipleConversations') {
+    getMultipleConversations(message.conversationIds)
+      .then(conversations => sendResponse({ conversations }))
+      .catch(error => sendResponse({ error: error.message }));
+    return true;
+  }
 });
 
 /**
@@ -249,6 +256,33 @@ function extractTextContent(element: Element): string {
 
   // 合併內容
   return textContent.join('\n\n') || mainText;
+}
+
+/**
+ * 批次獲取多個對話內容
+ */
+async function getMultipleConversations(
+  conversationIds: string[]
+): Promise<unknown[]> {
+  const results: unknown[] = [];
+
+  for (const id of conversationIds) {
+    try {
+      const content = await getConversationContent(id);
+      results.push(content);
+      // 防止請求過快
+      await sleep(300);
+    } catch (e) {
+      console.error(`獲取對話 ${id} 失敗:`, e);
+      results.push({ error: true, id });
+    }
+  }
+
+  return results;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 console.log('AI Chat Export: Gemini content script loaded');
