@@ -119,9 +119,29 @@ async function getCurrentConversation(): Promise<{
   const idMatch = currentUrl.match(/\/app\/([a-zA-Z0-9_-]+)/);
   const id = idMatch ? idMatch[1] : `gemini-${Date.now()}`;
 
-  // 嘗試獲取標題
-  const titleElement = document.querySelector('h1, [data-conversation-title]');
-  const title = titleElement?.textContent?.trim() || '無標題對話';
+  // 嘗試從側邊欄獲取標題（當前選中的對話）
+  let title = '無標題對話';
+
+  // 方法 1：從側邊欄找到當前活動的對話項目
+  const sidebarLinks = document.querySelectorAll('a[href*="/app/"]');
+  for (const link of sidebarLinks) {
+    const href = link.getAttribute('href') || '';
+    if (href.includes(id)) {
+      const linkTitle = link.textContent?.trim();
+      if (linkTitle && linkTitle.length > 0 && linkTitle.length < 200) {
+        title = linkTitle;
+        break;
+      }
+    }
+  }
+
+  // 方法 2：如果側邊欄找不到，使用第一條用戶訊息作為標題
+  if (title === '無標題對話' && messages.length > 0) {
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    if (firstUserMsg) {
+      title = firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '');
+    }
+  }
 
   return {
     id,
@@ -259,28 +279,56 @@ function determineRole(element: Element): 'user' | 'assistant' {
 }
 
 /**
- * 提取元素的文字內容
+ * 提取元素的文字內容，保留格式
  */
 function extractTextContent(element: Element): string {
-  // 嘗試獲取 markdown 或純文字內容
-  const codeBlocks = element.querySelectorAll('pre, code');
-  const textContent: string[] = [];
+  // 複製元素以避免修改原始 DOM
+  const clone = element.cloneNode(true) as Element;
+
+  // 移除思考過程區塊（Gemini 的 "thinking" 區域）
+  const thinkingBlocks = clone.querySelectorAll('[class*="thinking"], [class*="thought"], .loading-thoughts');
+  thinkingBlocks.forEach(block => block.remove());
 
   // 處理程式碼區塊
-  codeBlocks.forEach(block => {
-    textContent.push('```\n' + block.textContent + '\n```');
+  const codeBlocks = clone.querySelectorAll('pre');
+  codeBlocks.forEach(pre => {
+    const code = pre.querySelector('code');
+    const lang = code?.className.match(/language-(\w+)/)?.[1] || '';
+    const codeText = (code?.textContent || pre.textContent || '').trim();
+    // 替換整個 pre 的內容
+    const marker = document.createTextNode('\n```' + lang + '\n' + codeText + '\n```\n');
+    pre.replaceWith(marker);
   });
 
-  // 獲取主要文字
-  const mainText = element.textContent?.trim() || '';
+  // 處理行內程式碼（排除已處理的 pre 內的 code）
+  const inlineCodes = clone.querySelectorAll('code');
+  inlineCodes.forEach(code => {
+    const text = code.textContent || '';
+    code.textContent = '`' + text + '`';
+  });
 
-  // 如果沒有程式碼區塊，直接返回文字
-  if (codeBlocks.length === 0) {
-    return mainText;
-  }
+  // 處理列表項目
+  const listItems = clone.querySelectorAll('li');
+  listItems.forEach(li => {
+    const text = li.textContent?.trim() || '';
+    li.textContent = '\n• ' + text;
+  });
 
-  // 合併內容
-  return textContent.join('\n\n') || mainText;
+  // 處理段落，確保換行
+  const paragraphs = clone.querySelectorAll('p');
+  paragraphs.forEach(p => {
+    const text = p.textContent?.trim() || '';
+    p.textContent = '\n' + text + '\n';
+  });
+
+  // 獲取最終文字
+  let text = clone.textContent?.trim() || '';
+
+  // 清理多餘的空白行
+  text = text.replace(/\n{3,}/g, '\n\n');
+  text = text.replace(/^\n+/, '').replace(/\n+$/, '');
+
+  return text;
 }
 
 /**

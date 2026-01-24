@@ -24,6 +24,11 @@ interface ConversationListResponse {
   offset: number;
 }
 
+interface MessageInfo {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 // 監聽來自 popup 的訊息
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === 'getConversations') {
@@ -35,6 +40,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.action === 'getConversationContent') {
     getConversationContent(message.conversationId)
+      .then(content => sendResponse({ content }))
+      .catch(error => sendResponse({ error: error.message }));
+    return true;
+  }
+
+  if (message.action === 'getCurrentConversation') {
+    getCurrentConversation()
       .then(content => sendResponse({ content }))
       .catch(error => sendResponse({ error: error.message }));
     return true;
@@ -175,30 +187,40 @@ function getConversationsFromDOM(): ConversationInfo[] {
  * 獲取單一對話的完整內容
  */
 async function getConversationContent(conversationId: string): Promise<unknown> {
-  const baseUrls = ['https://chatgpt.com', 'https://chat.openai.com'];
+  // 只使用當前頁面的域名，避免 CORS 錯誤
+  const currentHost = window.location.origin;
 
-  for (const baseUrl of baseUrls) {
-    try {
-      const response = await fetch(
-        `${baseUrl}/backend-api/conversation/${conversationId}`,
-        {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.ok) {
-        return await response.json();
+  try {
+    const response = await fetch(
+      `${currentHost}/backend-api/conversation/${conversationId}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
-    } catch (e) {
-      console.warn(`嘗試 ${baseUrl} 失敗:`, e);
-    }
-  }
+    );
 
-  throw new Error('無法獲取對話內容');
+    if (response.ok) {
+      return await response.json();
+    }
+
+    // 如果 API 失敗（404 等），返回需要導航的標記
+    console.warn(`API 返回 ${response.status}，需要導航`);
+    return {
+      id: conversationId,
+      needsNavigation: true,
+      status: response.status,
+    };
+  } catch (e) {
+    console.warn(`獲取對話 ${conversationId} 失敗:`, e);
+    return {
+      id: conversationId,
+      needsNavigation: true,
+      error: String(e),
+    };
+  }
 }
 
 /**
@@ -222,6 +244,109 @@ async function getMultipleConversations(
   }
 
   return results;
+}
+
+/**
+ * 獲取當前頁面的對話內容（從 DOM）
+ */
+async function getCurrentConversation(): Promise<{
+  id: string;
+  title: string;
+  messages: MessageInfo[];
+}> {
+  const messages = extractMessagesFromDOM();
+
+  // 從 URL 獲取對話 ID
+  const idMatch = window.location.pathname.match(/\/c\/([a-f0-9-]+)/);
+  const id = idMatch ? idMatch[1] : `chatgpt-${Date.now()}`;
+
+  // 嘗試獲取標題
+  const titleElement = document.querySelector('h1, [data-testid="conversation-title"]');
+  const title = titleElement?.textContent?.trim() || '無標題對話';
+
+  return {
+    id,
+    title,
+    messages,
+  };
+}
+
+/**
+ * 從 DOM 提取訊息
+ */
+function extractMessagesFromDOM(): MessageInfo[] {
+  const messages: MessageInfo[] = [];
+
+  // ChatGPT 的訊息選擇器
+  const messageContainers = document.querySelectorAll('[data-message-author-role]');
+
+  messageContainers.forEach(container => {
+    const role = container.getAttribute('data-message-author-role');
+    const contentEl = container.querySelector('.markdown, .whitespace-pre-wrap');
+
+    if (contentEl) {
+      const content = extractTextContent(contentEl);
+      if (content && content.length > 0) {
+        messages.push({
+          role: role === 'user' ? 'user' : 'assistant',
+          content,
+        });
+      }
+    }
+  });
+
+  // Fallback: 嘗試其他選擇器
+  if (messages.length === 0) {
+    const turns = document.querySelectorAll('[data-testid^="conversation-turn"]');
+    turns.forEach((turn, index) => {
+      const content = extractTextContent(turn);
+      if (content && content.length > 10) {
+        messages.push({
+          role: index % 2 === 0 ? 'user' : 'assistant',
+          content,
+        });
+      }
+    });
+  }
+
+  return messages;
+}
+
+/**
+ * 提取元素的文字內容，保留格式
+ */
+function extractTextContent(element: Element): string {
+  // 複製元素以避免修改原始 DOM
+  const clone = element.cloneNode(true) as Element;
+
+  // 處理程式碼區塊
+  const codeBlocks = clone.querySelectorAll('pre');
+  codeBlocks.forEach(pre => {
+    const code = pre.querySelector('code');
+    const lang = code?.className.match(/language-(\w+)/)?.[1] || '';
+    const codeText = code?.textContent || pre.textContent || '';
+    pre.textContent = '\n```' + lang + '\n' + codeText + '\n```\n';
+  });
+
+  // 處理行內程式碼
+  const inlineCodes = clone.querySelectorAll('code:not(pre code)');
+  inlineCodes.forEach(code => {
+    code.textContent = '`' + code.textContent + '`';
+  });
+
+  // 處理列表
+  const listItems = clone.querySelectorAll('li');
+  listItems.forEach(li => {
+    li.textContent = '• ' + li.textContent?.trim() + '\n';
+  });
+
+  // 獲取最終文字
+  let text = clone.textContent?.trim() || '';
+
+  // 清理多餘的空白行
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text;
 }
 
 function sleep(ms: number): Promise<void> {
