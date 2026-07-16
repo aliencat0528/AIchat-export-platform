@@ -32,7 +32,7 @@ const platformColors: Record<Platform, string> = {
 };
 
 const selectedCount = computed(() =>
-  conversations.value.filter(c => c.selected).length
+  conversations.value.filter(c => c.selected).length,
 );
 
 onMounted(async () => {
@@ -128,7 +128,7 @@ const waitForPageLoad = (tabId: number): Promise<void> => {
 const exportGeminiConversations = async (
   tabId: number,
   selected: ConversationInfo[],
-  originalUrl: string
+  originalUrl: string,
 ): Promise<unknown[]> => {
   const results: unknown[] = [];
   const total = selected.length;
@@ -179,7 +179,7 @@ const exportGeminiConversations = async (
 const exportChatGPTConversations = async (
   tabId: number,
   selected: ConversationInfo[],
-  originalUrl: string
+  originalUrl: string,
 ): Promise<unknown[]> => {
   const results: unknown[] = [];
   const total = selected.length;
@@ -260,7 +260,7 @@ const exportSelected = async () => {
 
       // 檢查是否有需要導航的對話
       const needsNavigation = apiResults.some(
-        (r: { needsNavigation?: boolean }) => r?.needsNavigation
+        (r: { needsNavigation?: boolean }) => r?.needsNavigation,
       );
 
       if (needsNavigation) {

@@ -30,13 +30,13 @@ const filteredConversations = computed(() => {
     const query = searchQuery.value.toLowerCase();
     result = result.filter(c =>
       c.title.toLowerCase().includes(query) ||
-      c.messages.some(m => m.content.toLowerCase().includes(query))
+      c.messages.some(m => m.content.toLowerCase().includes(query)),
     );
   }
 
   // 按更新時間排序（最新的在前面）
   return result.sort((a, b) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 });
 

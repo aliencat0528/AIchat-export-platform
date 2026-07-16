@@ -103,7 +103,7 @@ async function getConversations(): Promise<ConversationInfo[]> {
         headers: {
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -194,7 +194,7 @@ async function getConversationContent(conversationId: string): Promise<unknown> 
         headers: {
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -230,7 +230,7 @@ async function getCurrentConversation(): Promise<{
 
   // 嘗試獲取標題
   const titleElement = document.querySelector(
-    'h1, [data-testid="conversation-title"], .conversation-title'
+    'h1, [data-testid="conversation-title"], .conversation-title',
   );
   const title = titleElement?.textContent?.trim() || '無標題對話';
 
@@ -245,7 +245,7 @@ async function getCurrentConversation(): Promise<{
  * 批次獲取多個對話內容
  */
 async function getMultipleConversations(
-  conversationIds: string[]
+  conversationIds: string[],
 ): Promise<unknown[]> {
   const results: unknown[] = [];
 
