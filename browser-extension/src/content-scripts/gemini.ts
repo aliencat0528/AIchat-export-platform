@@ -346,7 +346,7 @@ function extractTextContent(element: Element): string {
  * 批次獲取多個對話內容
  */
 async function getMultipleConversations(
-  conversationIds: string[]
+  conversationIds: string[],
 ): Promise<unknown[]> {
   const results: unknown[] = [];
 

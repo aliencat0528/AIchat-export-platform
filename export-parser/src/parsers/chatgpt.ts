@@ -160,7 +160,7 @@ export class ChatGPTParser implements Parser {
    */
   private extractMessages(
     mapping: Record<string, ChatGPTNode>,
-    currentNode?: string
+    currentNode?: string,
   ): UnifiedMessage[] {
     // 方法 1：從 current_node 往上遍歷（得到主要對話路徑）
     if (currentNode && mapping[currentNode]) {
@@ -176,7 +176,7 @@ export class ChatGPTParser implements Parser {
    */
   private extractMessagesFromCurrentNode(
     mapping: Record<string, ChatGPTNode>,
-    currentNode: string
+    currentNode: string,
   ): UnifiedMessage[] {
     const messages: UnifiedMessage[] = [];
     const path: string[] = [];
@@ -209,7 +209,7 @@ export class ChatGPTParser implements Parser {
 
     // 找到根節點（沒有 parent 或 parent 為 null 的節點）
     const rootNodes = Object.values(mapping).filter(
-      (node) => !node.parent || !mapping[node.parent]
+      (node) => !node.parent || !mapping[node.parent],
     );
 
     // DFS 遍歷訊息樹

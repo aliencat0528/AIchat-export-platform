@@ -213,7 +213,7 @@ async function getConversations(): Promise<ConversationInfo[]> {
   try {
     while (hasMore) {
       const response = await apiRequest(
-        `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated`
+        `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated`,
       );
 
       const data: ConversationListResponse = await response.json();
@@ -542,7 +542,7 @@ function extractTextContent(element: Element): string {
  * 批次獲取多個對話內容
  */
 async function getMultipleConversations(
-  conversationIds: string[]
+  conversationIds: string[],
 ): Promise<unknown[]> {
   const results: unknown[] = [];
 
@@ -571,7 +571,7 @@ const currentUrl = window.location.href;
 const conversationId = getCurrentConversationIdFromUrl();
 
 console.log(`[Content Script] Loaded (v${version})`);
-console.log(`AI Chat Export: ChatGPT content script loaded`);
+console.log('AI Chat Export: ChatGPT content script loaded');
 console.log(`當前頁面: ${currentUrl}`);
 if (conversationId) {
   console.log(`檢測到對話 ID: ${conversationId}`);

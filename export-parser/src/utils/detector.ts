@@ -50,7 +50,7 @@ async function parseExtensionExport(data: ExtensionExportData): Promise<ParseRes
 
     // 檢查是否所有對話都需要導航（舊版本匯出的問題）
     const needsNavigationCount = rawConversations.filter(
-      (c) => (c as { needsNavigation?: boolean }).needsNavigation
+      (c) => (c as { needsNavigation?: boolean }).needsNavigation,
     ).length;
 
     if (needsNavigationCount === rawConversations.length && rawConversations.length > 0) {
@@ -63,7 +63,7 @@ async function parseExtensionExport(data: ExtensionExportData): Promise<ParseRes
 
     // 檢查是否為 ChatGPT 原始 API 格式（有 mapping 欄位）
     const hasMappingFormat = rawConversations.some(
-      (c) => (c as { mapping?: unknown }).mapping !== undefined
+      (c) => (c as { mapping?: unknown }).mapping !== undefined,
     );
 
     if (hasMappingFormat && data.platform === 'chatgpt') {

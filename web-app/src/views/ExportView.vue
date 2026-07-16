@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { getAllConversations, exportAllData } from '@/db';
-import type { UnifiedConversation, Platform, ExportFormat } from '@aichat-export/shared';
+import type { UnifiedConversation, Platform } from '@aichat-export/shared';
 
 const conversations = ref<UnifiedConversation[]>([]);
 const selectedIds = ref<Set<string>>(new Set());
-const exportFormat = ref<ExportFormat>('json');
 const isLoading = ref(true);
 
 const platformLabels: Record<Platform, string> = {

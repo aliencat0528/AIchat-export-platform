@@ -1,0 +1,22 @@
+# Pre-commit Hooks - AI Chat Export Platform
+# TypeScript / Vue 3 + 基礎檢查
+# 安裝：pip install pre-commit && pre-commit install
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+        exclude: tsconfig.*\.json$
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: no-commit-to-branch
+        args: [--branch, main]

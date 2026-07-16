@@ -1,0 +1,160 @@
+# Cursor Rules (Project: AI Chat Export Platform)
+# Inherits: Global Golden Standard (../CLAUDE.md)
+# Extends: Local Project Rules (CLAUDE.md)
+
+# =============================================================================
+# 🌐 MULTI-MODEL COMPATIBILITY
+# =============================================================================
+
+## Supported AI Tools
+- **Antigravity** (Google) - 長上下文理解 monorepo
+- **Cursor** (Native) - Vue 3 開發首選
+- **Claude Code** (CLI) - 批次測試
+- **Aider** (Open Source) - 重構任務
+
+## Model Switching for This Project
+```yaml
+理解整體架構: Antigravity / Claude Opus
+Vue 組件開發: Cursor + Sonnet
+Parser 開發: Claude Opus（複雜邏輯）
+批次重構: Aider + DeepSeek API
+```
+
+## Code Style Consistency
+```yaml
+naming:
+  variables: camelCase
+  functions: camelCase
+  components: PascalCase
+  types: PascalCase
+formatting:
+  prettier + eslint
+  indentation: 2 spaces
+  quotes: single
+  semicolons: required
+```
+
+# =============================================================================
+# 🚨 PROJECT-SPECIFIC RULES (HIGHEST PRIORITY)
+# =============================================================================
+
+## Project Overview
+Unified export and management tool for AI chat records (ChatGPT, Gemini, Claude).
+- **Tech Stack**: Vue 3 + TypeScript + Vite + IndexedDB + Chrome Extension
+- **Architecture**: npm workspaces monorepo
+
+## Project-Specific Commit Scopes
+| Scope | Description |
+|---|---|
+| `shared` | Shared utilities and types |
+| `parser` | Chat export parsers |
+| `extension` | Browser extension |
+| `web-app` | Web application |
+| `docs` | Documentation |
+
+**Examples**:
+- `feat(parser): add Gemini export parser`
+- `fix(extension): resolve content script injection issue`
+- `refactor(shared): optimize type definitions`
+
+## Project Structure
+```
+AIchat-export-platform/
+├── packages/
+│   ├── shared/            # Shared types (Scope: shared)
+│   ├── parser/            # Chat parsers (Scope: parser)
+│   ├── extension/         # Browser extension (Scope: extension)
+│   └── web-app/           # Web UI (Scope: web-app)
+└── docs/
+    └── ARCHITECTURE.md    # System architecture
+```
+
+## Documentation Triggers
+When these keywords appear, check if `docs/ARCHITECTURE.md` needs update:
+- `parser`, `解析器` → Module list, parsing flow
+- `view`, `頁面`, `component` → Web App page flow
+- `type`, `interface`, `型別` → Data model section
+- `IndexedDB`, `storage` → Storage architecture
+- `extension`, `擴充功能` → Extension architecture
+- `API`, `endpoint` → Platform API reference
+
+## Development Commands
+```bash
+npm run dev:web          # Web App dev server
+npm run dev:extension    # Browser Extension dev
+npm run build:all        # Build all packages (MUST run before commit)
+npm run lint             # ESLint check
+```
+
+## Before Committing (Project-Specific)
+- [ ] Run `npm run build:all` → Ensure TypeScript compiles
+- [ ] Run `npm run lint` → Check code style
+- [ ] Check if `docs/ARCHITECTURE.md` needs update
+
+# =============================================================================
+# 🔽 GLOBAL SHARED RULES (INHERITED)
+# =============================================================================
+
+## Git Workflow
+- **Commit**: Per milestone, Conventional Commits: `<type>(<scope>): <subject>`
+- **Branch Naming**: `<type>/<name>-<version>`
+  - `feature/`: Own sequence (`sec`, `third`, ...)
+  - `fix/`: Independent sequence (`first`, `sec`, ...)
+- **Flow**: `Implement → Auto Commit → Auto Push → Auto PR → [Manual Merge]`
+- **PR**: Title and Description MUST be in **繁體中文**
+- ⚠️ **NEVER** auto-merge or push directly to `main`
+
+## Mandatory Test Flow Report
+```markdown
+### 🧪 Test Flow Report
+1. **Setup**: [Commands to prepare environment]
+2. **Execution**: [CLI/API/Browser actions]
+3. **Expected**: [What should happen?]
+4. **Verification**: [Browser dev tools, console check]
+```
+
+## Safety & Quality
+- **Data Safety**: NEVER edit binary/auto-generated files manually
+- **Secrets**: NEVER commit `.env` files
+- **Architecture Docs**: Auto-update `docs/ARCHITECTURE.md` on structure changes
+- **Language**: Always respond in **繁體中文**
+- **Build Check**: `npm run build:all` must pass before commit
+
+## Bug Fix Workflow
+1. Check current branch for uncommitted changes (commit/stash first if needed)
+2. Create fix branch: `git checkout main && git checkout -b fix/<name>-<version>`
+3. Fix → commit → push → PR
+4. After merge: `git checkout <original-branch> && git rebase main`
+5. Continue original development
+
+## Session Recovery
+When resuming development:
+```bash
+git branch --show-current
+git status
+git log --oneline -5
+git stash list
+```
+
+## WIP Commits (Optional)
+```
+feat(component): WIP - feature 50% complete
+
+[WIP] indicates in-progress
+Next: complete XYZ integration
+```
+
+## Command Reference
+| Command | 中文 | Description |
+|---|---|---|
+| `switch branch` | `切換分支` | Create new branch |
+| `pause auto` | `暫停自動化` | Pause automation |
+| `resume auto` | `恢復自動化` | Resume automation |
+| `create PR` | `發 PR` | Trigger PR |
+| `commit only` | `只做到 commit` | Only commit, no push/PR |
+| `skip readme` | `跳過 README 更新` | Skip README update |
+| `init architecture` | `建立架構文件` | Create docs/ARCHITECTURE.md |
+| `update architecture` | `更新架構` | Update ARCHITECTURE.md |
+| `show architecture` | `檢視架構` | Display architecture summary |
+| `skip docs` | `跳過文件更新` | Skip docs/ update |
+| `continue previous` | `繼續上次開發` | Resume session |
