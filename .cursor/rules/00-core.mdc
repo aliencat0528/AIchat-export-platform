@@ -1,0 +1,81 @@
+---
+description: AI Chat Export Platform 核心規範：專案概述、commit scopes、開發指令、全域語言/風格/安全規則
+alwaysApply: true
+---
+
+# AI Chat Export Platform（核心規範）
+
+> 對應 Claude Code 規則：本專案 `CLAUDE.md` + 根目錄 `CLAUDE.md`（Claude Code 自動載入）。
+> 本 repo 為獨立 git repo，Cursor 單開時讀不到父層規則，故此處內嵌全域核心。
+> 規則有出入時一律以根目錄 `CLAUDE.md` 為準；修改全域規則請先改根目錄再同步回此處。
+
+## 專案概述
+
+AI 對話記錄統一匯出與管理工具（ChatGPT / Gemini / Claude）
+- **技術棧**：Vue 3 + TypeScript + Vite + IndexedDB + Chrome Extension
+- **架構**：npm workspaces monorepo
+
+```
+packages/
+├── shared/       # 共用型別（Scope: shared）
+├── parser/       # 對話解析器（Scope: parser）
+├── extension/    # 瀏覽器擴充套件（Scope: extension）
+└── web-app/      # Web UI（Scope: web-app）
+```
+
+## Commit Scopes
+
+| Scope | 說明 |
+|-------|------|
+| `shared` | 共用工具與型別 |
+| `parser` | 對話匯出解析器 |
+| `extension` | 瀏覽器擴充套件 |
+| `web-app` | Web 應用程式 |
+| `docs` | 文件 |
+
+範例：`feat(parser): add Gemini export parser`、`fix(extension): resolve content script injection issue`
+
+## 開發指令
+
+```bash
+npm run dev:web          # Web App 開發伺服器
+npm run dev:extension    # Extension 開發
+npm run build:all        # 建置所有套件（commit 前必跑）
+npm run lint             # ESLint 檢查
+npm run test             # 執行測試
+```
+
+## Commit 前必做（在全域清單之上「新增」，不取代）
+
+- [ ] `npm run build:all` → 確保 TypeScript 編譯通過
+- [ ] `npm run lint` → ESLint 檢查
+- [ ] 確認 `docs/ARCHITECTURE.md` 是否需更新
+
+## 領域知識索引
+
+需要時依索引載入：`.claude/knowledge/index.md`
+
+---
+
+# 繼承的全域核心規則（不可在此覆蓋）
+
+## 語言
+
+所有回應使用**繁體中文**。PR 標題與說明使用**繁體中文**。
+
+## 程式碼風格
+
+- **命名**：變數/函式 `camelCase`、Class/Component `PascalCase`、常數 `UPPER_SNAKE_CASE`
+- **縮排**：2 spaces、行寬上限 100
+- **引號**：JS/TS 用 single `'`
+- **非同步**：`async/await` 優先於 `.then()`
+- **Commit 前**：Lint + Build 必須通過
+- **修改前先讀現有程式碼**，保持與既有風格一致
+
+## 安全規則（不可覆蓋）
+
+- 禁止 commit `.env`、API Keys 等機密檔案（建議用 `.env.example`）
+- 禁止自動 merge 到 `main`，merge 由用戶手動執行
+- 禁止直接 push `main`（v1.0 初始 release 除外）
+- 禁止手動修改 binary / 自動生成資料檔（`.sqlite`, `.db`, `.json` dumps）
+- 新增重型依賴（TensorFlow, PyTorch, AWS SDK, Stripe SDK）前必須詢問

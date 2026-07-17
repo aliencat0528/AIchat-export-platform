@@ -1,0 +1,35 @@
+---
+description: 修改 README / CHANGELOG / docs/ 文件，或觸發文件關鍵字（parser、component、型別、IndexedDB、extension、API）時套用
+globs: README.md,CHANGELOG.md,docs/**,packages/*/README.md
+alwaysApply: false
+---
+
+# 文件維護規範
+
+## 文件觸發詞
+
+出現以下關鍵字時，檢查 `docs/ARCHITECTURE.md` 對應區塊是否需更新：
+
+| 觸發詞 | 檢查區塊 |
+|--------|---------|
+| `parser`, `解析器` | 模組清單、解析流程 |
+| `view`, `頁面`, `component` | Web App 頁面流程 |
+| `type`, `interface`, `型別` | 資料模型 |
+| `IndexedDB`, `storage` | 儲存架構 |
+| `extension`, `擴充功能` | Extension 架構 |
+| `API`, `endpoint` | 平台 API 參考 |
+
+## Commit 前自查（靜默執行，不需提醒用戶）
+
+- [ ] 新增/修改功能？→ 更新 `README.md`、`CHANGELOG.md`
+- [ ] 新增/刪除檔案或模組？→ 更新 `docs/ARCHITECTURE.md`、README 結構
+- [ ] 修改 API？→ 更新 `docs/API.md`
+- [ ] 新增依賴？→ 更新 `package.json`、`docs/DEPENDENCIES.md`
+- [ ] 完成里程碑？→ 更新 `CHANGELOG.md`
+- [ ] 架構變動？→ 更新 `docs/ARCHITECTURE.md`
+
+## 版本規則
+
+- **Semantic Versioning**：MAJOR（破壞性）/ MINOR（新功能）/ PATCH（bug fix）
+- README 維持 `## 版本歷史`，格式 `### vX.Y.Z (YYYY-MM-DD)`
+- **CHANGELOG**：遵循 Keep a Changelog（Added / Changed / Fixed / Removed）
