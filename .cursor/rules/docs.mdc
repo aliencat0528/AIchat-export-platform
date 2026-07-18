@@ -1,6 +1,6 @@
 ---
 description: 修改 README / CHANGELOG / docs/ 文件，或觸發文件關鍵字（parser、component、型別、IndexedDB、extension、API）時套用
-globs: README.md,CHANGELOG.md,docs/**,packages/*/README.md
+globs: README.md,CHANGELOG.md,docs/**,**/README.md
 alwaysApply: false
 ---
 
