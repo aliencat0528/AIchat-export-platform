@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getConversation, deleteConversation } from '@/db';
 import type { UnifiedConversation, Platform } from '@aichat-export/shared';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 // 配置 marked
 marked.setOptions({
@@ -12,11 +13,13 @@ marked.setOptions({
 });
 
 // 渲染 Markdown
+// 訊息內容來自匯入的第三方檔案，marked 不做消毒，
+// 進 v-html 前必須過 DOMPurify（catch 分支的原文同樣要消毒）
 const renderMarkdown = (content: string): string => {
   try {
-    return marked.parse(content) as string;
+    return DOMPurify.sanitize(marked.parse(content) as string);
   } catch {
-    return content;
+    return DOMPurify.sanitize(content);
   }
 };
 
